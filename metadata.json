@@ -1,0 +1,15 @@
+{
+  "name": "VE Commercial Vehicles EWO Manager",
+  "description": "A comprehensive system for managing Emergency Work Orders (EWOs), tracking maintenance KPIs, and monitoring critical spare consumption for VE Commercial Vehicles.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "Production and Maintenance user roles",
+    "Real-time EWO logging and resolution",
+    "Why-Why analysis and countermeasure tracking",
+    "KPI dashboards (MTTR, MTBF)",
+    "Critical spare stock management",
+    "Automated shift reporting and notifications"
+  ]
+}

@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return request.auth.token.email_verified == true; }
+    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isApproved() { return getUserData().status == 'approved'; }
+    function hasRole(role) { return getUserData().role == role; }
+    function isAdmin() { return hasRole('Admin'); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'status', 'createdAt'])
+        && data.keys().size() == 6
+        && data.uid == request.auth.uid
+        && data.email == request.auth.token.email
+        && data.role in ['Production', 'Maintenance', 'Admin']
+        && data.status == 'pending' // New users always start as pending
+        && data.createdAt == request.time;
+    }
+
+    function isValidEWO(data) {
+      return data.keys().hasAll(['ewoId', 'line', 'opNo', 'shift', 'problem', 'startTime', 'status', 'createdBy'])
+        && data.ewoId is string && data.ewoId.size() <= 64
+        && data.line is string
+        && data.opNo is string
+        && data.shift in ['A', 'B', 'C']
+        && data.problem is string && data.problem.size() <= 2000
+        && data.status in ['Open', 'Acknowledged', 'Resolved', 'Closed', 'Reopened']
+        && data.startTime is timestamp
+        && data.createdBy == request.auth.uid;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && isValidUser(incoming()) && userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && (
+        // Admin can approve and change roles
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasAny(['status', 'role'])) ||
+        // User can update their own name
+        (userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['name']))
+      );
+    }
+
+    // --- EWOs Collection ---
+    match /ewos/{ewoId} {
+      allow get: if isSignedIn() && isApproved();
+      allow list: if isSignedIn() && isApproved();
+
+      allow create: if isSignedIn() && isApproved() && hasRole('Production') && isValidEWO(incoming());
+
+      allow update: if isSignedIn() && isApproved() && (
+        // Production: Close/Reopen
+        (hasRole('Production') && (
+          (incoming().status == 'Closed' && existing().status == 'Resolved' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'closedAt', 'verifiedBy'])) ||
+          (incoming().status == 'Reopened' && existing().status == 'Resolved' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+        )) ||
+        // Maintenance: Acknowledge/Resolve
+        (hasRole('Maintenance') && (
+          (incoming().status == 'Acknowledged' && existing().status == 'Open' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'acknowledgedAt', 'maintenanceUser'])) ||
+          (incoming().status == 'Resolved' && (existing().status == 'Acknowledged' || existing().status == 'Reopened') && incoming().diff(existing()).affectedKeys().hasAny(['status', 'resolvedAt', 'actionTaken', 'sparePartsUsed', 'whyWhy', 'countermeasure', 'targetDate', 'totalDowntime']))
+        )) ||
+        // Admin: Anything
+        isAdmin()
+      );
+    }
+
+    // --- Spares Collection ---
+    match /spares/{spareId} {
+      allow read: if isSignedIn() && isApproved();
+      allow create, update: if isAdmin();
+      // Maintenance can decrement stock upon use (handled via a client-side transaction or separate check?)
+      // Actually, better to use a consumption log and let admin/system sync stock, or allow maintenance limited update
+      allow update: if hasRole('Maintenance') && incoming().diff(existing()).affectedKeys().hasOnly(['stock']);
+    }
+
+    // --- Spare Consumptions ---
+    match /spareConsumptions/{id} {
+      allow read: if isSignedIn() && isApproved();
+      allow create: if isSignedIn() && isApproved() && (hasRole('Maintenance') || hasRole('Production'));
+    }
+
+    // --- Shift Reports ---
+    match /shiftReports/{id} {
+      allow read: if isSignedIn() && isApproved();
+      allow create: if isSignedIn() && isApproved() && hasRole('Production');
+    }
+  }
+}

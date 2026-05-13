@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System users with role-based access",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Production", "Maintenance", "Admin"] },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "status"]
+    },
+    "EWO": {
+      "title": "Emergency Work Order",
+      "description": "Records of machine breakdowns and resolutions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ewoId": { "type": "string", "description": "Formatted ID: EWO-DDMMYY-HH:mm" },
+        "line": { "type": "string" },
+        "machine": { "type": "string" },
+        "opNo": { "type": "string" },
+        "shift": { "type": "string", "enum": ["A", "B", "C"] },
+        "problem": { "type": "string" },
+        "operatorName": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "acknowledgedAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" },
+        "closedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Open", "Acknowledged", "Resolved", "Closed", "Reopened"] },
+        "createdBy": { "type": "string" },
+        "maintenanceUser": { "type": "string" },
+        "actionTaken": { "type": "string" },
+        "sparePartsUsed": { "type": "string" },
+        "whyWhy": {
+          "type": "object",
+          "properties": {
+            "why1": { "type": "string" },
+            "why2": { "type": "string" },
+            "why3": { "type": "string" },
+            "why4": { "type": "string" },
+            "why5": { "type": "string" }
+          }
+        },
+        "countermeasure": { "type": "string" },
+        "targetDate": { "type": "string", "format": "date" },
+        "totalDowntime": { "type": "number", "description": "Downtime in minutes" }
+      },
+      "required": ["ewoId", "line", "opNo", "shift", "problem", "startTime", "status", "createdBy"]
+    },
+    "Spare": {
+      "title": "Spare Part",
+      "description": "Inventory management",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "stock": { "type": "number" },
+        "reorderLevel": { "type": "number" },
+        "isCritical": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "stock", "reorderLevel", "isCritical"]
+    },
+    "SpareConsumption": {
+      "title": "Spare Consumption",
+      "description": "Log of spare parts used",
+      "type": "object",
+      "properties": {
+        "materialId": { "type": "string" },
+        "ewoId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["materialId", "quantity", "date", "userId"]
+    },
+    "ShiftReport": {
+      "title": "Shift Report",
+      "description": "End of shift logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "shift": { "type": "string", "enum": ["A", "B", "C"] },
+        "productionLead": { "type": "string" },
+        "breakdownIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "shift", "productionLead", "breakdownIds"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "Profiles" },
+    "/ewos/{ewoId}": { "schema": "EWO", "description": "Work orders" },
+    "/spares/{spareId}": { "schema": "Spare", "description": "Inventory" },
+    "/spareConsumptions/{id}": { "schema": "SpareConsumption", "description": "Usage logs" },
+    "/shiftReports/{id}": { "schema": "ShiftReport", "description": "Shift logs" }
+  }
+}
